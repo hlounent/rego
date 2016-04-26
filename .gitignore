@@ -5,3 +5,4 @@
 .cproject
 build/
 bin/
+Gemfile.lock
