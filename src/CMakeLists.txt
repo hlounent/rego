@@ -16,3 +16,4 @@ endif()
 
 add_subdirectory(marshaller)
 add_subdirectory(protocol)
+add_subdirectory(regoctl)

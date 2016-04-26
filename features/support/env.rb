@@ -18,3 +18,19 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 =end
 
 require 'aruba/cucumber'
+
+module RegoWorld
+  def initialize()
+    @socat_pid = 0
+  end
+end
+
+World(RegoWorld)
+
+After ('@fake-serial-device') do |scenario|
+  Process.kill("SIGINT", @socat_pid) if @socat_pid > 0
+  @socat_pid = 0
+
+  @port.close if not @port.nil?
+  @port = nil
+end
