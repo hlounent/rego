@@ -17,10 +17,11 @@ endif()
 
 set(CucumberLibs cucumber-cpp boost_regex boost_system boost_thread boost_date_time)
 set(GMockLibs gmock gmock_main)
+set(RegoLibs protocol)
 
 set(StepsSrc steps.cpp)
 set(StepsBin steps)
-set(StepsDeps ${CucumberLibs} ${GMockLibs} -lstdc++ -lm)
+set(StepsDeps ${RegoLibs} ${CucumberLibs} ${GMockLibs} -lstdc++ -lm)
 add_executable(${StepsBin} ${StepsSrc})
 target_link_libraries(${StepsBin} ${StepsDeps})
 

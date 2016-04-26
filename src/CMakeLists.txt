@@ -13,3 +13,5 @@ if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
 else()
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Werror -Wextra")
 endif()
+
+add_subdirectory(protocol)
