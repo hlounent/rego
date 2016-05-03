@@ -44,6 +44,8 @@ namespace {
 // Constants
 enum
 {
+    // Invalid file descriptor
+    INVALID_FD = -1,
     // The response packet is always 5 bytes long
     RESPONSE_LENGTH = 5,
     // The maximum time to wait for a response
@@ -270,6 +272,87 @@ void read_register(const int fd, const int16_t address, const int timeout)
     handle_response(response, response_length);
 }
 
+/*
+Writes a value to a single register
+
+@param fd [in] the file descriptor to write to
+@param address [in] the address of the register
+@param value [in] the value to be written
+@param timeout [in] timeout (in seconds) for reading the response
+*/
+void write_register(const int fd, const int16_t address, const int16_t value, const int timeout)
+{
+    if (is_verbose)
+    {
+        std::cout << "Constructing the message" << std::endl;
+    }
+    rego::protocol::composer c;
+    const byte_sequence_t message = c.create_message(0x03, address, value);
+    if (is_verbose)
+    {
+        std::cout << "Writing the message";
+        print_in_hex(message);
+        std::cout << std::endl;
+    }
+    const ssize_t bytes_written = write(fd, message.c_str(), message.length());
+    if (is_verbose)
+    {
+        std::cout << "Wrote " << bytes_written << " bytes" << std::endl;
+    }
+
+    if (is_verbose)
+    {
+        std::cout << "Reading the response" << std::endl;
+    }
+
+    // @todo Does Rego send a response? Yes, but only one character. Which character in which situation?
+    byte_sequence_t response;
+    const unsigned int response_length = read_response(fd, timeout, response);
+    if (is_verbose)
+    {
+        std::cout << "Raw data:";
+        print_in_hex(response);
+        std::cout << std::endl;
+    }
+
+    handle_response(response, response_length);
+}
+
+// @todo Return int16_t to avoid the need for a cast
+long int parse_address(const std::string& address_str)
+{
+    char* end = NULL;
+    const long int address = strtol(address_str.c_str(), &end, 0);
+    if (address < 0 ||
+        address > INT16_MAX)
+    {
+        throw std::invalid_argument("Address out of range: " + address_str);
+    }
+    else if (address == 0 && end == address_str.c_str())
+    {
+        throw std::invalid_argument("Malformed address: " + address_str);
+    }
+    return address;
+}
+
+// @todo Combine with parse_address
+long int parse_value(const std::string& value_str)
+{
+    char* end = NULL;
+    const long int value = strtol(value_str.c_str(), &end, 0);
+    // @todo Are negative values needed / allowed?
+    if (value < 0 ||
+        value > INT16_MAX)
+    {
+        throw std::invalid_argument("Value out of range: " + value_str);
+    }
+    else if (value == 0 && end == value_str.c_str())
+    {
+        throw std::invalid_argument("Malformed value: " + value_str);
+    }
+    return value;
+}
+
 } // unnamed namespace
 
 int main(int argc, char** argv)
@@ -277,11 +360,13 @@ int main(int argc, char** argv)
     po::options_description options("Options");
     // @todo Handle read, scan, etc as subcommands
     options.add_options()
-        ("scan,s", po::value<std::string>(), "scan a range of registers ]0x0,0x10000]")
+        ("scan,s", po::value<std::string>(), "scan a range of registers [0x0,0x7fff]")
         ("help,h", "produce help message")
         ("port", po::value<std::string>(), "the serial port for communications with Rego")
-        ("read,r", po::value<std::string>(), "read from a register ]0x0,0x10000]")
+        ("read,r", po::value<std::string>(), "read from a register [0x0,0x7fff]")
+        ("write,w", po::value<std::string>(), "write to a register [0x0,0x7fff]")
         ("timeout,t", po::value<int>(), "time-out for reading response (s)")
+        ("value,e", po::value<std::string>(), "the value to be written [0x0,0x7fff])")
         ("verbose,v", "print verbose output");
 
     po::positional_options_description pod;
@@ -307,81 +392,99 @@ int main(int argc, char** argv)
     }
 
     struct termios oldtio;
-    int fd = -1;
+    int fd = INVALID_FD;
 
-    // @todo Use log4cxx or similar for logging
-    if (vm.count("read"))
-    {
-        // @todo Replace with an overloaded Rego_638::sensor_query(int16_t) method
-        const std::string address_str = vm["read"].as<std::string>();
-        char* end = NULL;
-        const long int address = strtol(address_str.c_str(), &end, 0);
-        // @todo Handle the error return value 0 when no conversion can be performed
-        if (address < 0 ||
-            address > INT16_MAX ||
-            (address == 0 && end == address_str.c_str()))
+    // Move read, write, scan into their own functions and / or files
+    try {
+        if (vm.count("read"))
         {
-            std::cerr << "Invalid address: " << address_str << std::endl;
-            print_usage(argv[0], options);
-            return EXIT_FAILURE;
-        }
-        fd = open_serial_port(port_path, oldtio);
-        if (fd < 0)
-        {
-            return EXIT_FAILURE;
-        }
-        read_register(fd, static_cast<int16_t>(address), timeout);
-    }
-    else if (vm.count("scan"))
-    {
-        const std::string range = vm["scan"].as<std::string>();
-        const std::string::size_type separator_pos = range.find_first_of("-");
-        if (separator_pos == std::string::npos ||
-            // The possible index of the separator is 3: "0x0-"
-            separator_pos < 3 ||
-            // The minimum length is 7 characters: "0x0-0x1"
-            range.length() < 7)
-        {
-            std::cerr << "Invalid range: " << range << std::endl;
-            print_usage(argv[0], options);
-            return EXIT_FAILURE;
-        }
-        const std::string range_start_str = range.substr(0, separator_pos);
-        const std::string range_end_str = range.substr(separator_pos + 1);
-        std::cout << range_start_str << std::endl;
-        std::cout << range_end_str << std::endl;
-        char* end = NULL;
-        const long int range_start = strtol(range_start_str.c_str(), &end, 0);
-        if (range_start < 0 ||
-            range_start > INT16_MAX - 1 ||
-            (range_start == 0 && end == range_start_str.c_str()))
-        {
-            std::cerr << "Invalid range start: " << range_start_str << std::endl;
-            print_usage(argv[0], options);
-            return EXIT_FAILURE;
-        }
-        const long int range_end = strtol(range_end_str.c_str(), NULL, 0);
-        if (range_end < 1 ||
-            range_end > INT16_MAX ||
-            (range_end == 0 && end == range_end_str.c_str()))
-        {
-            std::cerr << "Invalid range end: " << range_end_str << std::endl;
-            print_usage(argv[0], options);
-            return EXIT_FAILURE;
-        }
-        fd = open_serial_port(port_path, oldtio);
-        if (fd < 0)
-        {
-            return EXIT_FAILURE;
-        }
-        for (int address = static_cast<int16_t>(range_start); address <= static_cast<int16_t>(range_end); ++address)
-        {
-            printf("Reading register 0x%.2x\n", address);
+            // @todo Replace with an overloaded Rego_638::sensor_query(int16_t) method
+            const std::string address_str = vm["read"].as<std::string>();
+            const long int address = parse_address(address_str);
+            fd = open_serial_port(port_path, oldtio);
+            if (fd < 0)
+            {
+                return EXIT_FAILURE;
+            }
             read_register(fd, static_cast<int16_t>(address), timeout);
         }
+        else if (vm.count("write"))
+        {
+            if (vm.count("value") != 1)
+            {
+                print_usage(argv[0], options);
+                return EXIT_FAILURE;
+            }
+            const std::string address_str = vm["write"].as<std::string>();
+            const long int address = parse_address(address_str);
+            const std::string value_str = vm["value"].as<std::string>();
+            const long int value = parse_value(value_str);
+            fd = open_serial_port(port_path, oldtio);
+            if (fd < 0)
+            {
+                return EXIT_FAILURE;
+            }
+            write_register(fd, static_cast<int16_t>(address), static_cast<int16_t>(value), timeout);
+        }
+        else if (vm.count("scan"))
+        {
+            const std::string range = vm["scan"].as<std::string>();
+            const std::string::size_type separator_pos = range.find_first_of("-");
+            if (separator_pos == std::string::npos ||
+                // The possible index of the separator is 3: "0x0-"
+                separator_pos < 3 ||
+                // The minimum length is 7 characters: "0x0-0x1"
+                range.length() < 7)
+            {
+                std::cerr << "Invalid range: " << range << std::endl;
+                print_usage(argv[0], options);
+                return EXIT_FAILURE;
+            }
+            const std::string range_start_str = range.substr(0, separator_pos);
+            const std::string range_end_str = range.substr(separator_pos + 1);
+            std::cout << range_start_str << std::endl;
+            std::cout << range_end_str << std::endl;
+            char* end = NULL;
+            const long int range_start = strtol(range_start_str.c_str(), &end, 0);
+            if (range_start < 0 ||
+                range_start > INT16_MAX - 1 ||
+                (range_start == 0 && end == range_start_str.c_str()))
+            {
+                std::cerr << "Invalid range start: " << range_start_str << std::endl;
+                print_usage(argv[0], options);
+                return EXIT_FAILURE;
+            }
+            const long int range_end = strtol(range_end_str.c_str(), NULL, 0);
+            if (range_end < 1 ||
+                range_end > INT16_MAX ||
+                (range_end == 0 && end == range_end_str.c_str()))
+            {
+                std::cerr << "Invalid range end: " << range_end_str << std::endl;
+                print_usage(argv[0], options);
+                return EXIT_FAILURE;
+            }
+            fd = open_serial_port(port_path, oldtio);
+            if (fd < 0)
+            {
+                return EXIT_FAILURE;
+            }
+            for (int address = static_cast<int16_t>(range_start); address <= static_cast<int16_t>(range_end); ++address)
+            {
+                printf("Reading register 0x%.2x\n", address);
+                read_register(fd, static_cast<int16_t>(address), timeout);
+            }
+        }
+    }
+    catch (std::exception& e)
+    {
+        std::cerr << e.what() << std::endl;
     }
 
-    close_serial_port(fd, oldtio);
+    if (fd >= 0)
+    {
+        close_serial_port(fd, oldtio);
+        fd = INVALID_FD;
+    }
 
     if (is_verbose)
     {
