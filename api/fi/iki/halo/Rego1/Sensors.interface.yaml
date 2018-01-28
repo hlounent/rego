@@ -1,0 +1,13 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+
+description: >
+    Exposes the features of the Rego600 heat pump controller.
+
+methods:
+    - name: ReadAll
+      description: Reads all Rego600 sensors
+      returns:
+          - name: values
+            type: array[struct[string, variant[boolean, double]]]
+            description: >
+                An array of sensor names and values.

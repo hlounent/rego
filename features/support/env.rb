@@ -19,11 +19,14 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 =end
 
+ENV['PATH'] = "#{ENV['PATH']}:#{ENV['PWD']}/sbin"
+
 require 'aruba/cucumber'
 
 module RegoWorld
   def initialize()
     @socat_pid = 0
+    @data_written_to_serial_port = ""
   end
 end
 

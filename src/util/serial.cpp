@@ -122,6 +122,7 @@ unsigned int read_response(const int fd, const int timeout, protocol::byte_seque
         }
         else
         {
+            // TODO: Use const instead (all occurances)
             static constexpr int BUFFER_LENGTH = 10;
             unsigned char read_buffer[BUFFER_LENGTH];
             const ssize_t received = read(fd, read_buffer, BUFFER_LENGTH);

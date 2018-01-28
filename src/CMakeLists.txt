@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 include(FindPkgConfig)
+include(GNUInstallDirs)
 
 include_directories(${PROJECT_SOURCE_DIR}/src)
 
@@ -22,4 +23,5 @@ include_directories(${log4cxx_INCLUDE_DIR})
 add_subdirectory(marshaller)
 add_subdirectory(protocol)
 add_subdirectory(regoctl)
+add_subdirectory(regod)
 add_subdirectory(util)
