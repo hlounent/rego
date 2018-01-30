@@ -3,7 +3,7 @@ include_directories(SYSTEM ${CMAKE_SOURCE_DIR}/ots/cucumber-cpp/cucumber-cpp/inc
 include_directories(SYSTEM ${CMAKE_SOURCE_DIR}/ots/gmock/gmock-1.7.0/gtest/include)
 include_directories(SYSTEM ${CMAKE_SOURCE_DIR}/ots/gmock/gmock-1.7.0/include)
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -Werror -Wall -Wextra -Weffc++")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Werror -Wall -Wextra -Weffc++")
 if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Weverything")
     # Pure virtual interfaces trigger -Wweak-vtables

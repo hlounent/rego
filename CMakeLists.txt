@@ -4,6 +4,8 @@ project(
     VERSION 0.0.1
 )
 
+set(CMAKE_CXX_STANDARD 14)
+
 option(BUILD_UNIT_TESTS "Build C++ unit tests" ON)
 option(BUILD_STEP_DEFINITIONS "Build Gherkin C++ step definitions" ON)
 
