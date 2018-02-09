@@ -44,8 +44,9 @@ end
 Then(/^(only )?the message (.+) should be written to ([\/a-zA-Z0-9]+)$/) do |only, expected_message_in_hex, port_path|
   port = SerialPort.new(@serial_port_ctl_path, 19200, 8, 1, SerialPort::NONE)
   port.binmode
-  port.read_timeout = 1
-  message = port.read(9)
+  port.read_timeout = 10
+  # Two characters per byte
+  message = port.read(expected_message_in_hex.length / 2)
   
   ready_io_objects = IO.select([port], nil, nil, 0) unless only.nil?
   
