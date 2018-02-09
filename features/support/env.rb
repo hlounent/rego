@@ -23,6 +23,8 @@ ENV['PATH'] = "#{ENV['PATH']}:#{ENV['PWD']}/sbin"
 
 require 'aruba/cucumber'
 
+ENV['LD_LIBRARY_PATH'] = "/usr/local/lib"
+
 module RegoWorld
   def initialize()
     @socat_pid = 0
