@@ -19,6 +19,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #pragma once
 
+#include <cstdint>
 #include <string>
 
 namespace rego {
@@ -27,7 +28,7 @@ namespace protocol {
 /**
 A convenience type holding a sequence of bytes
 */
-typedef std::basic_string<unsigned char> byte_sequence_t;
+typedef std::basic_string<uint8_t> byte_sequence_t;
 
 } // namespace protocol
 } // namespace rego
