@@ -2,7 +2,7 @@
 SPDX-License-Identifier: GPL-2.0-or-later
 
 rego -- tools for interfacing with the Rego ground heat pump controller
-Copyright (C) 2016  Hannu Lounento
+Copyright (C) 2016,2018  Hannu Lounento
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -19,311 +19,75 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 */
 
-// POSIX compliant source
-#define _POSIX_SOURCE 1
-
 #include "protocol/composer.hpp"
 #include "protocol/marshaller.hpp"
+#include "util/cli.hpp"
+#include "util/helpers.hpp"
+#include "util/serial.hpp"
 
-#include <algorithm>
+#include <boost/optional.hpp>
 #include <boost/program_options.hpp>
-#include <cerrno>
 #include <cstdint>
-#include <cstdio>
 #include <cstdlib>
-#include <cstring>
-#include <fcntl.h>
 #include <iostream>
-#include <poll.h>
-#include <termios.h>
-#include <vector>
+#include <log4cxx/logger.h>
+#include <log4cxx/helpers/properties.h>
+#include <log4cxx/propertyconfigurator.h>
+#include <log4cxx/helpers/exception.h>
 
 namespace po = boost::program_options;
+
+using namespace log4cxx;
+using namespace log4cxx::helpers;
+
 using namespace rego::protocol;
+using namespace rego::util;
 
 namespace {
 
-// Constants
-enum
-{
-    // Invalid file descriptor
-    INVALID_FD = -1,
-    // The response packet is always 5 bytes long
-    RESPONSE_LENGTH = 5,
-    // The maximum time to wait for a response
-    RESPONSE_TIMEOUT = 2
-};
-
-// Whether verbose (debug) level messages should be printed (to stdout)
-bool is_verbose = false;
-
-// Prints the given byte sequence to stdout in hexadecimal format
-void print_in_hex(const byte_sequence_t& data)
-{
-    for (auto b : data)
-    {
-        printf(" 0x%.2x", static_cast<int>(b));
-    }
-}
-
-// Print usage
-void print_usage(const std::string& executable, const po::options_description& options)
-{
-    std::cout << "Usage: " << executable << " [options]\n";
-    std::cout << options;
-}
-
 /*
-Opens the given device node as a serial port
-
-@param path [in] the path of the device (e.g. /dev/ttyUSB0)
-@param oldtio [out] storage for saving port's current configuration
+Initializes log4cxx to be used for logging
 */
-int open_serial_port(const std::string& path, struct termios& oldtio)
+void initialize_logging(const std::string& log_level)
 {
-    const int fd = open(path.c_str(), O_RDWR | O_NOCTTY | O_NDELAY);
-    if (fd < 0)
+    if (log_level != "info" &&
+        log_level != "debug" &&
+        log_level != "trace")
     {
-        return EXIT_FAILURE;
+        std::cerr << "Invalid log level: '" << log_level << std::endl;
+        std::exit(EXIT_FAILURE);
     }
 
-    tcgetattr(fd, &oldtio);
-
-    // @todo Replace asserts with non-fatal checks
-    struct termios newtio;
-    memset(&newtio, 0, sizeof(newtio));
-    newtio.c_cflag = CS8 | CRTSCTS | CLOCAL | CREAD;
-    newtio.c_iflag = IGNPAR;
-//    newtio.c_iflag = 0;
-    newtio.c_oflag = 0;
-    newtio.c_lflag = 0; // Non-canonical mode, i.e. don't modify the data
-    newtio.c_cc[VTIME] = 0; // Don't block
-    newtio.c_cc[VMIN] = 0; // Read only what is available
-    cfmakeraw(&newtio);
-    assert(cfsetospeed(&newtio, B19200) == 0);
-    assert(cfsetispeed(&newtio, B19200) == 0); // @todo This could be set to zero to match the output baud rate
-
-    tcflush(fd, TCIFLUSH);
-    tcsetattr(fd, TCSANOW, &newtio);
-
-    // Check that the settings are in effect
+    try
     {
-        struct termios currenttio;
-        tcgetattr(fd, &currenttio);
-        assert(currenttio.c_cflag == newtio.c_cflag);
-        assert(currenttio.c_iflag == newtio.c_iflag);
-        assert(currenttio.c_oflag == newtio.c_oflag);
-        assert(currenttio.c_lflag == newtio.c_lflag);
+        LoggerPtr root = Logger::getRootLogger();
+        log4cxx::helpers::Properties properties;
+        const std::string rootLoggerConfiguration = log_level + ", stdout";
+        properties.put("log4j.rootLogger", rootLoggerConfiguration);
+        properties.put("log4j.appender.stdout", "org.apache.log4j.ConsoleAppender");
+        properties.put("log4j.appender.stdout.layout", "org.apache.log4j.PatternLayout");
+        properties.put("log4j.appender.stdout.layout.ConversionPattern", "%m\n");
+        PropertyConfigurator::configure(properties);
+
     }
-
-    return fd;
-}
-
-// Closes the serial port associated with the given fd restoring it to the given configuration
-void close_serial_port(const int fd, const struct termios& oldtio)
-{
-    tcsetattr(fd, TCSANOW, &oldtio);
-    close(fd);
-}
-
-/*
-Reads a response from Rego
-
-@param fd [in] the file descriptor to read from
-@param timeout [in] timeout (in seconds) for read
-@param response [out] the buffer to write the received data to
-
-Note: Due to poll, which does not decrement the timeout value like select does,
-      the total timeout may be longer than the given value
-
-@todo Measure time spent in poll and decrement the timeout value for subsequent calls
-*/
-unsigned int read_response(const int fd, const int timeout, byte_sequence_t& response)
-{
-    enum
+    catch(const Exception&)
     {
-        // For receiving any extra bytes
-        EXTRA_CAPACITY = 5
-    };
-
-    unsigned int bytes_received = 0;
-
-    enum { N_FDS = 1 };
-    struct pollfd fds[N_FDS];
-    fds[0].fd = fd;
-    fds[0].events = POLLIN;
-    fds[0].revents = 0;
-
-    while (bytes_received < RESPONSE_LENGTH)
-    {
-        const int rv = poll(fds, N_FDS, timeout * 1000);
-        if (rv == -1)
-        {
-            std::cerr << "Failed to read response" << strerror(errno) << std::endl;
-            break;
-        }
-        else if (rv == 0)
-        {
-            std::cerr << "Time-out!" << std::endl;
-            break;
-        }
-        else
-        {
-            enum
-            {
-                BUFFER_LENGTH = 10
-            };
-            unsigned char read_buffer[BUFFER_LENGTH];
-            const ssize_t received = read(fd, read_buffer, BUFFER_LENGTH);
-            read_buffer[received] = 0;
-
-            if (is_verbose)
-            {
-                std::cout << "Read " << received << " bytes" << std::endl;
-            }
-            response.append(read_buffer, static_cast<byte_sequence_t::size_type>(received));
-            bytes_received += received;
-        }
+        std::cerr << "Failed to configure logging (log4cxx)" << std::endl;
+        std::exit(EXIT_FAILURE);
     }
-    return bytes_received;
-}
-
-/*
-Handles a response received from Rego
-
-@param response [in] the response
-@param length [in] the length of the response, i.e. how many bytes 'response' contains
-*/
-void handle_response(const byte_sequence_t& response, const unsigned int length)
-{
-    if (length == 0)
-    {
-        std::cerr << "No response received" << std::endl;
-    }
-    else if (length > 0 && length < RESPONSE_LENGTH)
-    {
-        std::cerr << "Invalid message: too short message: " << length << std::endl;
-    }
-    else if (length > RESPONSE_LENGTH)
-    {
-        std::cerr << "Invalid message: too long message: " << length << std::endl;
-    }
-    else if (length == RESPONSE_LENGTH)
-    {
-        composer c;
-        if (response.at(0) != 0x01)
-        {
-            std::cerr << "Invalid message: incorrect destination address" << std::endl;
-        }
-        else if (!c.is_checksum_valid(byte_sequence_t(response.begin() + 1, response.begin() + RESPONSE_LENGTH)))
-        {
-            std::cerr << "Invalid message: incorrect checksum" << std::endl;
-        }
-        else
-        {
-            byte_sequence_t tmp;
-            // Exclude the address and checksum
-            tmp.assign(response.begin() + 1, response.begin() + RESPONSE_LENGTH - 1);
-            marshaller m;
-            const int16_t value = m.unmarshall(tmp);
-            std::cout << "Received: " << value << std::endl;
-        }
-    }
-}
-
-/*
-Reads a single register and handles the response
-
-@param fd [in] the file descriptor to read from
-@param address [in] the address of the register
-@param timeout [in] timeout (in seconds) for read
-*/
-void read_register(const int fd, const int16_t address, const int timeout)
-{
-    if (is_verbose)
-    {
-        std::cout << "Constructing the message" << std::endl;
-    }
-    rego::protocol::composer c;
-    const byte_sequence_t message = c.create_message(0x02, address, 0x0000);
-    if (is_verbose)
-    {
-        std::cout << "Writing the message";
-        print_in_hex(message);
-        std::cout << std::endl;
-    }
-    const ssize_t bytes_written = write(fd, message.c_str(), message.length());
-    if (is_verbose)
-    {
-        std::cout << "Wrote " << bytes_written << " bytes" << std::endl;
-    }
-
-    if (is_verbose)
-    {
-        std::cout << "Reading the response" << std::endl;
-    }
-    byte_sequence_t response;
-    const unsigned int response_length = read_response(fd, timeout, response);
-    if (is_verbose)
-    {
-        std::cout << "Raw data:";
-        print_in_hex(response);
-        std::cout << std::endl;
-    }
-
-    handle_response(response, response_length);
-}
-
-/*
-Writes a value to a single register
-
-@param fd [in] the file descriptor to write to
-@param address [in] the address of the register
-@param value [in] the value to be written
-@param timeout [in] timeout (in seconds) for reading the response
-*/
-void write_register(const int fd, const int16_t address, const int16_t value, const int timeout)
-{
-    if (is_verbose)
-    {
-        std::cout << "Constructing the message" << std::endl;
-    }
-    rego::protocol::composer c;
-    const byte_sequence_t message = c.create_message(0x03, address, value);
-    if (is_verbose)
-    {
-        std::cout << "Writing the message";
-        print_in_hex(message);
-        std::cout << std::endl;
-    }
-    const ssize_t bytes_written = write(fd, message.c_str(), message.length());
-    if (is_verbose)
-    {
-        std::cout << "Wrote " << bytes_written << " bytes" << std::endl;
-    }
-
-    if (is_verbose)
-    {
-        std::cout << "Reading the response" << std::endl;
-    }
-
-    // @todo Does Rego send a response? Yes, but only one character. Which character in which situation?
-    byte_sequence_t response;
-    const unsigned int response_length = read_response(fd, timeout, response);
-    if (is_verbose)
-    {
-        std::cout << "Raw data:";
-        print_in_hex(response);
-        std::cout << std::endl;
-    }
-
-    handle_response(response, response_length);
 }
 
 // @todo Return int16_t to avoid the need for a cast
+/*
+Parses a Rego register address
+
+@param address_str [in] The address to be parsed as a string
+
+@return The address as an integer
+*/
 long int parse_address(const std::string& address_str)
 {
-    char* end = NULL;
+    char* end = nullptr;
     const long int address = strtol(address_str.c_str(), &end, 0);
     if (address < 0 ||
         address > INT16_MAX)
@@ -338,9 +102,16 @@ long int parse_address(const std::string& address_str)
 }
 
 // @todo Combine with parse_address
+/*
+Parses a value (to be) carried by the Rego protocol
+
+@param value_str [in] The value to be parsed
+
+@return The value as an integer
+*/
 long int parse_value(const std::string& value_str)
 {
-    char* end = NULL;
+    char* end = nullptr;
     const long int value = strtol(value_str.c_str(), &end, 0);
     // @todo Are negative values needed / allowed?
     if (value < 0 ||
@@ -355,10 +126,18 @@ long int parse_value(const std::string& value_str)
     return value;
 }
 
-} // unnamed namespace
+constexpr int INVALID_FD = -1;
+
+// Whether verbose (debug) level messages should be printed (to stdout)
+bool is_verbose = false;
+
+LoggerPtr logger(Logger::getLogger("regoctl"));
+
+} // anonymous namespace
 
 int main(int argc, char** argv)
 {
+    std::vector<bool> verbose_flags;
     po::options_description options("Options");
     // @todo Handle read, scan, etc as subcommands
     options.add_options()
@@ -369,7 +148,8 @@ int main(int argc, char** argv)
         ("write,w", po::value<std::string>(), "write to a register [0x0,0x7fff]")
         ("timeout,t", po::value<int>(), "time-out for reading response (s)")
         ("value,e", po::value<std::string>(), "the value to be written [0x0,0x7fff])")
-        ("verbose,v", "print verbose output");
+        ("log-level,l", po::value<std::string>()->default_value("info"),
+            "log level: info, debug, trace");
 
     po::positional_options_description pod;
     pod.add("port", -1);
@@ -380,14 +160,21 @@ int main(int argc, char** argv)
 
     if (vm.count("help"))
     {
-        print_usage(argv[0], options);
+        rego::util::print_usage(argv[0], options);
         return 0;
     }
 
-    is_verbose = vm.count("verbose");
+    const std::string log_level = vm["log-level"].as<std::string>();
+    initialize_logging(log_level);
 
+    if (vm.count("port") != 1)
+    {
+        LOG4CXX_ERROR(logger, "Port is a required argument");
+        rego::util::print_usage(argv[0], options);
+    }
     const std::string port_path = vm["port"].as<std::string>();
-    const int timeout = vm.count("timeout") ? vm["timeout"].as<int>() : RESPONSE_TIMEOUT;
+    static constexpr int DEFAULT_RESPONSE_TIMEOUT = 2;
+    const int timeout = vm.count("timeout") ? vm["timeout"].as<int>() : DEFAULT_RESPONSE_TIMEOUT;
     if (is_verbose)
     {
         std::cout << "Opening the serial port " << port_path << std::endl;
@@ -408,13 +195,18 @@ int main(int argc, char** argv)
             {
                 return EXIT_FAILURE;
             }
-            read_register(fd, static_cast<int16_t>(address), timeout);
+            const boost::optional<int16_t> value =
+                read_register(fd, static_cast<int16_t>(address), timeout);
+            if (value)
+            {
+                std::cout << "Received: " << *value << std::endl;
+            }
         }
         else if (vm.count("write"))
         {
             if (vm.count("value") != 1)
             {
-                print_usage(argv[0], options);
+                rego::util::print_usage(argv[0], options);
                 return EXIT_FAILURE;
             }
             const std::string address_str = vm["write"].as<std::string>();
@@ -438,31 +230,31 @@ int main(int argc, char** argv)
                 // The minimum length is 7 characters: "0x0-0x1"
                 range.length() < 7)
             {
-                std::cerr << "Invalid range: " << range << std::endl;
-                print_usage(argv[0], options);
+                LOG4CXX_ERROR(logger, "Invalid range: " << range);
+                rego::util::print_usage(argv[0], options);
                 return EXIT_FAILURE;
             }
             const std::string range_start_str = range.substr(0, separator_pos);
             const std::string range_end_str = range.substr(separator_pos + 1);
             std::cout << range_start_str << std::endl;
             std::cout << range_end_str << std::endl;
-            char* end = NULL;
+            char* end = nullptr;
             const long int range_start = strtol(range_start_str.c_str(), &end, 0);
             if (range_start < 0 ||
                 range_start > INT16_MAX - 1 ||
                 (range_start == 0 && end == range_start_str.c_str()))
             {
-                std::cerr << "Invalid range start: " << range_start_str << std::endl;
-                print_usage(argv[0], options);
+                LOG4CXX_ERROR(logger, "Invalid range start: " << range_start_str);
+                rego::util::print_usage(argv[0], options);
                 return EXIT_FAILURE;
             }
-            const long int range_end = strtol(range_end_str.c_str(), NULL, 0);
+            const long int range_end = strtol(range_end_str.c_str(), nullptr, 0);
             if (range_end < 1 ||
                 range_end > INT16_MAX ||
                 (range_end == 0 && end == range_end_str.c_str()))
             {
-                std::cerr << "Invalid range end: " << range_end_str << std::endl;
-                print_usage(argv[0], options);
+                LOG4CXX_ERROR(logger, "Invalid range end: " << range_end_str);
+                rego::util::print_usage(argv[0], options);
                 return EXIT_FAILURE;
             }
             fd = open_serial_port(port_path, oldtio);
@@ -473,13 +265,18 @@ int main(int argc, char** argv)
             for (int address = static_cast<int16_t>(range_start); address <= static_cast<int16_t>(range_end); ++address)
             {
                 printf("Reading register 0x%.2x\n", address);
-                read_register(fd, static_cast<int16_t>(address), timeout);
+                const boost::optional<int16_t> value =
+                    read_register(fd, static_cast<int16_t>(address), timeout);
+                if (value)
+                {
+                    std::cout << "Received: " << *value << std::endl;
+                }
             }
         }
     }
     catch (std::exception& e)
     {
-        std::cerr << e.what() << std::endl;
+        LOG4CXX_ERROR(logger, e.what());
     }
 
     if (fd >= 0)

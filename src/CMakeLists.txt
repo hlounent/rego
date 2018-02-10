@@ -1,5 +1,7 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 
+include(FindPkgConfig)
+
 include_directories(${PROJECT_SOURCE_DIR}/src)
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Werror -Wall -Wextra -Weffc++")
@@ -16,6 +18,10 @@ else()
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Werror -Wextra")
 endif()
 
+pkg_check_modules(log4cxx REQUIRED liblog4cxx)
+include_directories(${log4cxx_INCLUDE_DIR})
+
 add_subdirectory(marshaller)
 add_subdirectory(protocol)
 add_subdirectory(regoctl)
+add_subdirectory(util)

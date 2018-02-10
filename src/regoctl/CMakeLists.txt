@@ -11,7 +11,10 @@ include_directories(${Boost_INCLUDE_DIR})
 add_executable(regoctl regoctl.cpp)
 target_link_libraries(regoctl
     protocol
+    util
     ${Boost_LIBRARIES}
+    ${log4cxx_LIBRARIES}
+    ${log4cxx_LIBRARIES}
     pthread
 )
 
