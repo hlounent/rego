@@ -146,7 +146,7 @@ int main(int argc, char** argv)
         ("port", po::value<std::string>(), "the serial port for communications with Rego")
         ("read,r", po::value<std::string>(), "read from a register [0x0,0x7fff]")
         ("write,w", po::value<std::string>(), "write to a register [0x0,0x7fff]")
-        ("timeout,t", po::value<int>(), "time-out for reading response (s)")
+        ("timeout,t", po::value<int>(), "time-out for reading response (ms)")
         ("value,e", po::value<std::string>(), "the value to be written [0x0,0x7fff])")
         ("log-level,l", po::value<std::string>()->default_value("info"),
             "log level: info, debug, trace");
@@ -173,7 +173,7 @@ int main(int argc, char** argv)
         rego::util::print_usage(argv[0], options);
     }
     const std::string port_path = vm["port"].as<std::string>();
-    static constexpr int DEFAULT_RESPONSE_TIMEOUT = 2;
+    static constexpr int DEFAULT_RESPONSE_TIMEOUT = 2000;
     const int timeout = vm.count("timeout") ? vm["timeout"].as<int>() : DEFAULT_RESPONSE_TIMEOUT;
     if (is_verbose)
     {

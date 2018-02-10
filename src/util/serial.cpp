@@ -109,7 +109,7 @@ unsigned int read_response(const int fd, const int timeout, protocol::byte_seque
 
     while (bytes_received < RESPONSE_LENGTH)
     {
-        const int rv = poll(fds, N_FDS, timeout * 1000);
+        const int rv = poll(fds, N_FDS, timeout);
         if (rv == -1)
         {
             LOG4CXX_ERROR(logger, "Failed to read response" << strerror(errno));
