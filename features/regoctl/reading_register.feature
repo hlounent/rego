@@ -69,7 +69,7 @@ Feature: Reading registers
 
   @fake-serial-device
   Scenario Outline: Too short response
-    Given I run `regoctl --read 0x020b /tmp/rego` in background
+    Given I run `regoctl --timeout 100 --read 0x020b /tmp/rego` in background
     When Rego sends the response <response>
     Then the output should contain:
     """

@@ -9,7 +9,7 @@ Feature: Scanning registers
   @fake-serial-device
   Scenario Outline: Scan a range of addresses
     Given Rego is connected via serial line /tmp/rego
-    When I successfully run `regoctl --scan <range> /tmp/rego`
+    When I successfully run `regoctl --timeout 100 --scan <range> /tmp/rego`
     Then the message <message1> should be written to /tmp/rego
     Then only the message <message2> should be written to /tmp/rego
 
