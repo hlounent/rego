@@ -3,6 +3,9 @@ Feature: Reading registers
   I want to read values from Rego's registers
   in order to inspect the ground heat pump configuration.
 
+  Background:
+    Given Rego is connected via serial line /tmp/rego
+
   @fake-serial-device
   Scenario Outline: Reading a register specified on the command line
     Given Rego is connected via serial line /tmp/rego
@@ -16,7 +19,6 @@ Feature: Reading registers
 
   @fake-serial-device
   Scenario Outline: A valid response
-    Given Rego is connected via serial line /tmp/rego
     Given I run `regoctl --read 0x020b /tmp/rego` in background
     When Rego sends the response <response>
     Then the output should contain:
@@ -31,7 +33,6 @@ Feature: Reading registers
 
   @fake-serial-device
   Scenario Outline: A valid response in multiple parts
-    Given Rego is connected via serial line /tmp/rego
     Given I run `regoctl --read 0x020b /tmp/rego` in background
     When Rego sends the response <part1>
     When there is a delay of <delay> ms
@@ -50,7 +51,6 @@ Feature: Reading registers
 
   @fake-serial-device
   Scenario Outline: An invalid response
-    Given Rego is connected via serial line /tmp/rego
     Given I run `regoctl --read 0x020b /tmp/rego` in background
     When Rego sends the response <response>
     Then the output should contain:
@@ -67,7 +67,6 @@ Feature: Reading registers
 
   @fake-serial-device
   Scenario Outline: Too short response
-    Given Rego is connected via serial line /tmp/rego
     Given I run `regoctl --read 0x020b /tmp/rego` in background
     When Rego sends the response <response>
     Then the output should contain:
@@ -83,7 +82,6 @@ Feature: Reading registers
 
   @fake-serial-device
   Scenario Outline: Too long response
-    Given Rego is connected via serial line /tmp/rego
     Given I run `regoctl --read 0x020b /tmp/rego` in background
     When Rego sends the response <response>
     Then the output should contain:
@@ -103,7 +101,6 @@ Feature: Reading registers
 
   @fake-serial-device
   Scenario Outline: Invalid checksum
-    Given Rego is connected via serial line /tmp/rego
     Given I run `regoctl --read 0x020b /tmp/rego` in background
     When Rego sends the response <response>
     Then the output should contain:
@@ -118,4 +115,3 @@ Feature: Reading registers
     | 0100010303 |
     | 01000103fd |
     | 01000103ff |
-    
