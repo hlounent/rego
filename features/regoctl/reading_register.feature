@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+
 Feature: Reading registers
   As an IVT Greenline HT Plus ground heat pump owner,
   I want to read values from Rego's registers

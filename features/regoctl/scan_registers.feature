@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+
 Feature: Scanning registers
   As a developer,
   I want to scan a range of addresses

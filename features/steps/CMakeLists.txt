@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+
 include_directories(${CMAKE_SOURCE_DIR}/src)
 include_directories(SYSTEM ${CMAKE_SOURCE_DIR}/ots/cucumber-cpp/cucumber-cpp/include)
 include_directories(SYSTEM ${CMAKE_SOURCE_DIR}/ots/gmock/gmock-1.7.0/gtest/include)

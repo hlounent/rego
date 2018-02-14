@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+
 set(src
     composer.cpp
     marshaller.cpp

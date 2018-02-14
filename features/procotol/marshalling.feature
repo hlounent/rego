@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+
 Feature: Data marshalling
   In order to transmit data to the Rego device over serial line data needs to
   be marshalled into 7 bit long chunks most significant byte first.

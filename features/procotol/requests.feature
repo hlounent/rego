@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+
 Feature: Sending messages
   In order to request data from Rego a message consisting of 9 bytes needs to
   be sent to it.

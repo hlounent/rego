@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+
 find_package(Boost 1.54 COMPONENTS program_options REQUIRED)
 include_directories(${Boost_INCLUDE_DIR})
 

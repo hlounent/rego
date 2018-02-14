@@ -1,4 +1,6 @@
 =begin
+SPDX-License-Identifier: GPL-2.0-or-later
+
 rego -- tools for interfacing with the Rego ground heat pump controller
 Copyright (C) 2016  Hannu Lounento
 
