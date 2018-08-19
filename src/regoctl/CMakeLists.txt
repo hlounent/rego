@@ -13,4 +13,4 @@ target_link_libraries(regoctl
     pthread
 )
 
-install(TARGETS regoctl DESTINATION bin)
+install(TARGETS regoctl DESTINATION ${CMAKE_INSTALL_BINDIR})
