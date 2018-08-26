@@ -1,9 +1,9 @@
 *~
 *.swp
 *.swo
-.project
-.cproject
-build/
-bin/
-Gemfile.lock
-venv/
+/.project
+/.cproject
+/build/
+/bin/
+/Gemfile.lock
+/venv/
