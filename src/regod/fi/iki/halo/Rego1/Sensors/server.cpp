@@ -82,7 +82,9 @@ const vtable::vtable_t Sensors::_vtable[] = {
                         .data(),
                    details::Sensors::_return_ReadAll
                         .data(),
-                   _callback_ReadAll),
+                   _callback_ReadAll,
+                   SD_BUS_VTABLE_UNPRIVILEGED
+                   ),
     vtable::end()
 };
 
