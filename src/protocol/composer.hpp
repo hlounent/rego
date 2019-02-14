@@ -33,30 +33,27 @@ class composer
 {
 public:
     /** Constructor */
-    composer();
-
-    /** Destructor */
-    virtual ~composer();
+    composer() = default;
 
     /**
     Creates a message
-    
+
     @param command [in] the operation to be requested
     @param parameter [in] parameter for the command
     @param value [in] the value if writing to a register, otherwise 0
-    
+
     @return a message consisting of the given data, augmented with the heat pump
-    	address and checksum
+            address and checksu
     */
     byte_sequence_t create_message(unsigned char command, int16_t parameter, int16_t value);
 
     /**
     Calculates a checksum of the given data
-    
+
     The checksum is an exclusive OR of all bytes.
-    
+
     @param input [in] the data to be checksummed
-    
+
     @return the checksum
     */
     unsigned char calculate_checksum(const byte_sequence_t& input);

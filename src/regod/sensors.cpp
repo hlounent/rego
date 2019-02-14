@@ -42,8 +42,8 @@ LoggerPtr logger(Logger::getLogger("regod.sensors"));
 class conversion
 {
 public:
-    virtual ~conversion() {}
-    virtual sdbusplus::message::variant<bool, double> convert(const int16_t value) = 0;
+    virtual ~conversion() = default;
+    virtual sdbusplus::message::variant<bool, double> convert(int16_t value) = 0;
 };
 
 class conversion_to_bool : public conversion

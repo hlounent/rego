@@ -24,14 +24,6 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 namespace rego {
 namespace protocol {
 
-marshaller::marshaller()
-{
-}
-
-marshaller::~marshaller()
-{
-}
-
 byte_sequence_t marshaller::marshall(int16_t input)
 {
     byte_sequence_t output;

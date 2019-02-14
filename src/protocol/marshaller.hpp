@@ -37,10 +37,7 @@ class marshaller
 {
 public:
     /** Constructor */
-    marshaller();
-
-    /**  Destructor */
-    virtual ~marshaller();
+    marshaller() = default;
 
     /**
     Converts data to the serial protocol format

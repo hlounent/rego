@@ -37,14 +37,6 @@ enum
 
 } // unnamed namespace
 
-composer::composer()
-{
-}
-
-composer::~composer()
-{
-}
-
 byte_sequence_t composer::create_message(unsigned char command, int16_t parameter, int16_t value)
 {
     byte_sequence_t message;
