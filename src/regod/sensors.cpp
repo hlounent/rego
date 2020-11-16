@@ -74,6 +74,8 @@ public:
     conversion& m_conversion;
 } registers[] =
 {
+    { "Temp. increase/decrease",    0x000,    conversion_to_double },
+    { "Temp. fine tune",            0x001,    conversion_to_double },
     { "GT1 Radiator return",        0x209,    conversion_to_double },
     { "GT2 Outdoor",                0x20a,    conversion_to_double },
     { "GT3 Hot water",              0x20b,    conversion_to_double },
